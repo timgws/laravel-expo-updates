@@ -148,7 +148,7 @@ php artisan expo:fix-unique-constraint
 
 Or manually run the SQL script:
 ```bash
-mysql -u [user] -p [database] < vendor/meepha-studio/laravel-expo-updates/database/fix_unique_constraint.sql
+mysql -u [user] -p [database] < vendor/timgws/laravel-expo-updates/database/fix_unique_constraint.sql
 ```
 
 ### Manual Constraint Fix

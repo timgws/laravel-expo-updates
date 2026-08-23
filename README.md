@@ -6,30 +6,10 @@
     </p>
 </div>
 <pre style="margin: 0 auto; width: 50%;">
-# composer require meepha-studio/laravel-expo-updates 
+# composer require timgws/laravel-expo-updates
 </pre>
 
-> **Note:** This is a fork of [timgws/laravel-expo-updates](https://github.com/timgws/laravel-expo-updates) with critical fixes for production use.
-
-## What's New in This Fork?
-
-This fork implements **immutable manifest architecture** and full **Expo Updates v1 protocol compliance** to fix the "updates only work once" bug present in the original package.
-
-### Key Improvements
-
-✅ **Immutable Manifests** - Each deployment creates a new manifest with a unique UUID instead of updating existing ones, preventing file collisions and ensuring update reliability
-
-✅ **Asset Isolation** - Assets are stored in manifest-specific directories (`updates/{manifest_uuid}/{key}`) to prevent race conditions when multiple versions are deployed
-
-✅ **Byte-Matching Signatures** - Fixed signature generation to ensure single JSON encoding, guaranteeing OpenSSL signatures match the payload sent to clients
-
-✅ **Multipart/Mixed Protocol** - Full implementation of Expo Updates v1 multipart response format with proper `Content-Disposition` headers
-
-✅ **Laravel 12+ Compatibility** - Updated dependencies (Orchestra Testbench ^10.0, PHPUnit ^11.5) for modern Laravel apps
-
-✅ **Production Ready** - Includes migration for existing data, comprehensive test suite (30/30 passing), and complete documentation
-
-### Migration from Original Package
+### Did you use an older version of this repository?
 
 See the [Upgrading Guide](docs/UPGRADING.md) for detailed migration instructions. The package includes an automatic migration that converts existing assets to the new isolated structure.
 
@@ -65,14 +45,6 @@ Spotted a bug? Thanks for helping improve Laravel Expo Updates!
 [Please open a GitHub issue](../../issues/new?labels=bug).
 
 ## Installation (Server Side)
-
-You can install this fork via composer:
-
-```bash
-composer require meepha-studio/laravel-expo-updates
-```
-
-Or if you want to use the original package (without the critical fixes):
 
 ```bash
 composer require timgws/laravel-expo-updates
