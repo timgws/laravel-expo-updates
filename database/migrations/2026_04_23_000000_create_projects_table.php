@@ -28,7 +28,7 @@ return new class extends Migration
 
             $table->foreign('project_id')
                 ->references('id')
-                ->on('projects')
+                ->on('expo_projects')
                 ->onDelete('cascade');
 
             $table->index(['project_id', 'platform', 'runtime_version']);
@@ -48,12 +48,12 @@ return new class extends Migration
 
             $table->foreign('project_id')
                 ->references('id')
-                ->on('projects')
+                ->on('expo_projects')
                 ->onDelete('cascade');
 
             $table->foreign('manifest_id')
                 ->references('id')
-                ->on('manifests')
+                ->on('expo_manifests')
                 ->onDelete('cascade');
 
             $table->unique(['project_id', 'key']);
@@ -78,7 +78,7 @@ return new class extends Migration
                 ->cascadeOnDelete();
 
             // Ensure we only have one stat per project/platform/version/type/date
-            $table->unique(['project_id', 'platform', 'runtime_version', 'type', 'date']);
+            $table->unique(['project_id', 'platform', 'runtime_version', 'type', 'date'], 'expo_stats_unique_index');
         });
 
 

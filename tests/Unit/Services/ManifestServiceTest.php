@@ -91,7 +91,8 @@ class ManifestServiceTest extends TestCase
         Config::set('expo-updates.code_signing.private_key_path', __DIR__ . '/../../test-keys/private.key');
 
         $manifest = ['test' => 'value'];
-        $signature = $this->manifestService->signManifest($this->project, $manifest);
+        $manifestJson = json_encode($manifest);
+        $signature = $this->manifestService->signManifest($this->project, $manifestJson);
 
         $this->assertNotNull($signature);
         $this->assertStringStartsWith('sig="', $signature);
@@ -104,12 +105,13 @@ class ManifestServiceTest extends TestCase
         Config::set('expo-updates.code_signing.private_key_path', __DIR__ . '/../../test-keys/private.key');
 
         $manifest = ['test' => 'value'];
+        $manifestJson = json_encode($manifest);
         
         // First call should generate signature
-        $signature1 = $this->manifestService->signManifest($this->project, $manifest);
+        $signature1 = $this->manifestService->signManifest($this->project, $manifestJson);
         
         // Second call should use cached signature
-        $signature2 = $this->manifestService->signManifest($this->project, $manifest);
+        $signature2 = $this->manifestService->signManifest($this->project, $manifestJson);
 
         $this->assertEquals($signature1, $signature2);
     }

@@ -7,6 +7,31 @@ use LaravelExpoUpdates\ExpoUpdatesServiceProvider;
 
 class TestCase extends BaseTestCase
 {
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        $keyDir = __DIR__ . '/test-keys';
+        $privateKeyPath = $keyDir . '/private.key';
+        if (!is_dir($keyDir)) {
+            mkdir($keyDir, 0755, true);
+        }
+        if (!file_exists($privateKeyPath)) {
+            $resource = openssl_pkey_new([
+                'private_key_type' => OPENSSL_KEYTYPE_RSA,
+                'private_key_bits' => 2048,
+            ]);
+            if ($resource) {
+                openssl_pkey_export($resource, $privateKey);
+                file_put_contents($privateKeyPath, $privateKey);
+            }
+        }
+
+        // Ensure package tables exist in sqlite memory for each test run.
+        $this->loadMigrationsFrom(__DIR__ . '/../database/migrations');
+        $this->artisan('migrate', ['--database' => 'testing'])->run();
+    }
+
     protected function getPackageProviders($app)
     {
         return [
@@ -28,6 +53,7 @@ class TestCase extends BaseTestCase
         $app['config']->set('expo-updates', [
             'route_prefix' => 'expo-updates',
             'default_project' => 'test-project',
+            'upload_token' => 'test-upload-token-123',
             'code_signing' => [
                 'enabled' => false,
                 'certificate_path' => null,

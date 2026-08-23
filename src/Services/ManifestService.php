@@ -7,6 +7,7 @@ use Illuminate\Support\Facades\Cache;
 use LaravelExpoUpdates\Models\Manifest;
 use LaravelExpoUpdates\Models\Asset;
 use LaravelExpoUpdates\Models\Project;
+use  \Illuminate\Support\Facades\Log;
 
 /**
  * Service for handling manifest operations.
@@ -24,8 +25,14 @@ class ManifestService
      */
     public function getLatestManifest($project, string $platform, string $runtimeVersion, ?array $filters = null): ?array
     {
+        \Illuminate\Support\Facades\Log::info('OTA request received', [
+            'platform' => $platform,
+            'runtime_version' => $runtimeVersion
+        ]);
+        
         $project = $this->resolveProject($project);
         if (!$project) {
+            \Illuminate\Support\Facades\Log::error('Project not found');
             return null;
         }
 
@@ -44,19 +51,35 @@ class ManifestService
         $manifest = $query->first();
 
         if (!$manifest) {
+            \Illuminate\Support\Facades\Log::warning('No manifest found for platform/version');
             return null;
         }
 
+        \Illuminate\Support\Facades\Log::info('Manifest found', ['id' => $manifest->id]);
+
+        $extra = is_array($manifest->extra) ? $manifest->extra : [];
+
+        if (!isset($extra['expoClient'])) {
+            $extra['scopeKey'] = $project->slug ?? \Illuminate\Support\Str::slug(config('app.name', 'expo-app'));
+            $extra['expoClient'] = [
+                'name' => $project->name ?? config('app.name', 'Expo App'),
+                'slug' => $project->slug ?? \Illuminate\Support\Str::slug(config('app.name', 'expo-app')),
+                'version' => $project->version ?? '0.0.0',
+                'runtimeVersion' => $runtimeVersion
+            ];
+        }
         return [
             'id' => $manifest->id,
-            'createdAt' => $manifest->created_at->toIso8601String(),
+            'createdAt' => $manifest->created_at->toISOString(),
             'runtimeVersion' => $manifest->runtime_version,
             'launchAsset' => $this->formatAsset($manifest->launchAsset),
-            'assets' => $manifest->assets->map(
-                fn ($asset) => $this->formatAsset($asset)
-            )->toArray(),
+            'assets' => $manifest->assets
+                ->filter(fn ($asset) => $asset->id !== $manifest->launch_asset_id) // Exclude launch asset from assets array
+                ->map(fn ($asset) => $this->formatAsset($asset))
+                ->values() // Re-index array after filter
+                ->toArray(),
             'metadata' => $manifest->metadata,
-            'extra' => $manifest->extra,
+            'extra' => $extra,
         ];
     }
 
@@ -80,10 +103,10 @@ class ManifestService
      * Sign a manifest with the project's private key.
      *
      * @param Project|string $project Project instance or slug
-     * @param array $manifest Manifest data
+     * @param string $manifestJson Manifest JSON string (already encoded)
      * @return string|null
      */
-    public function signManifest($project, array $manifest): ?string
+    public function signManifest($project, string $manifestJson): ?string
     {
         $project = $this->resolveProject($project);
         if (!$project) {
@@ -95,21 +118,24 @@ class ManifestService
         }
 
         // Try to get cached signature
-        $cacheKey = "manifest_signature:{$project->id}:" . md5(json_encode($manifest));
+        $cacheKey = "manifest_signature:{$project->id}:" . md5($manifestJson);
         if ($signature = Cache::get($cacheKey)) {
             return $signature;
         }
-
+        $privateKeyPath = config('expo-updates.code_signing.private_key_path');
+        if (!file_exists($privateKeyPath)) {
+            Log::error('Private key not found', ['path' => $privateKeyPath]);
+            return null;
+        }
         $privateKey = file_get_contents(config('expo-updates.code_signing.private_key_path'));
         if (!$privateKey) {
             return null;
         }
 
-        $manifestJson = json_encode($manifest);
         $signature = '';
-        
+
         if (openssl_sign($manifestJson, $signature, $privateKey, OPENSSL_ALGO_SHA256)) {
-            $signature = 'sig="' . base64_encode($signature) . '"';
+            $signature = 'sig="' . base64_encode($signature) . '", keyid="main"';
             // Cache the signature for 1 hour
             Cache::put($cacheKey, $signature, now()->addHour());
             return $signature;
@@ -124,8 +150,12 @@ class ManifestService
      * @param Asset $asset
      * @return array
      */
-    protected function formatAsset(Asset $asset): array
+    public function formatAsset(?Asset $asset): array
     {
+        if (!$asset) {
+            return [];
+        }
+
         $formatted = [
             'key' => $asset->key,
             'contentType' => $asset->content_type,
@@ -133,12 +163,13 @@ class ManifestService
         ];
 
         if ($asset->hash) {
-            $formatted['hash'] = $asset->hash;
+            $base64UrlHash = strtr($asset->hash, '+/', '-_');
+            $formatted['hash'] = rtrim($base64UrlHash, '=');
         }
 
-        if ($asset->file_extension) {
-            $formatted['fileExtension'] = $asset->file_extension;
-        }
+        // ALWAYS include fileExtension (iOS client requires it, crashes if null)
+        // Use empty string if extension is already in the key
+        $formatted['fileExtension'] = $asset->file_extension ?? '';
 
         return $formatted;
     }
@@ -171,19 +202,20 @@ class ManifestService
     public function createManifest(Project $project, string $platform, string $runtimeVersion, array $metadata, array $expoConfig): Manifest
     {
         return DB::transaction(function () use ($project, $platform, $runtimeVersion, $metadata, $expoConfig) {
-            // Create the manifest
-            $manifest = Manifest::create([
-                'project_id' => $project->id,
-                'platform' => $platform,
-                'runtime_version' => $runtimeVersion,
-                'metadata' => $metadata,
-                'extra' => [
-                    'expoClientVersion' => $expoConfig['version'] ?? null,
-                    'expoClientVersionExtra' => $expoConfig['extra'] ?? null,
-                ],
-            ]);
-
+            // Generate new UUID for each manifest (immutable - insert only)
+            $uuid = (string) \Illuminate\Support\Str::uuid();
+            $manifest = new \LaravelExpoUpdates\Models\Manifest();
+            $manifest->id = $uuid;
+            $manifest->project_id = $project->id;
+            $manifest->platform = $platform;
+            $manifest->runtime_version = $runtimeVersion;
+            $manifest->metadata = $metadata;
+            $manifest->extra = [
+                'expoClientVersion' => $expoConfig['version'] ?? null,
+                'expoClientVersionExtra' => $expoConfig['extra'] ?? null,
+            ];
+            $manifest->save();
             return $manifest;
         });
     }
-} 
+}

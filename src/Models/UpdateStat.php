@@ -3,17 +3,19 @@
 namespace LaravelExpoUpdates\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use LaravelExpoUpdates\Contracts\UpdateStatInterface;
+use LaravelExpoUpdates\Tests\Factories\UpdateStatFactory;
 
 /**
  * Model for tracking update statistics.
  */
 class UpdateStat extends Model implements UpdateStatInterface
 {
+    use HasFactory;
+
     protected $table = 'expo_update_stats';
-    public $incrementing = false;
-    protected $keyType = 'string';
 
     /**
      * The attributes that are mass assignable.
@@ -22,6 +24,7 @@ class UpdateStat extends Model implements UpdateStatInterface
      */
     protected $fillable = [
         'project_id',
+        'manifest_id',
         'platform',
         'runtime_version',
         'type',
@@ -47,6 +50,14 @@ class UpdateStat extends Model implements UpdateStatInterface
         return $this->belongsTo(Project::class);
     }
 
+    /**
+     * Get the manifest that owns the stat.
+     */
+    public function manifest(): BelongsTo
+    {
+        return $this->belongsTo(Manifest::class);
+    }
+
     public function getPlatform(): string
     {
         return $this->platform;
@@ -70,5 +81,10 @@ class UpdateStat extends Model implements UpdateStatInterface
     public function getDate(): \DateTimeInterface
     {
         return $this->date;
+    }
+
+    protected static function newFactory()
+    {
+        return UpdateStatFactory::new();
     }
 } 

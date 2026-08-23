@@ -6,8 +6,12 @@
     </p>
 </div>
 <pre style="margin: 0 auto; width: 50%;">
-# composer require timgws/laravel-expo-updates 
+# composer require timgws/laravel-expo-updates
 </pre>
+
+### Did you use an older version of this repository?
+
+See the [Upgrading Guide](docs/UPGRADING.md) for detailed migration instructions. The package includes an automatic migration that converts existing assets to the new isolated structure.
 
 ## What is Laravel Expo Updates?
 
@@ -30,14 +34,17 @@ this package lets you keep everything in one stack.
 * **Self-hosted**: Own your release cadence, storage, and logs.
 * **Full control**: Gate who gets which updates and when.
 
+## Documentation
+
+- **[Upgrading Guide](docs/UPGRADING.md)** - Migration steps for upgrading to immutable manifest architecture
+- **[Manifest Management](docs/MANIFEST_MANAGEMENT.md)** - How to query, display, and manage manifests in your Laravel app
+
 ## Reporting Bugs
 
 Spotted a bug? Thanks for helping improve Laravel Expo Updates!
 [Please open a GitHub issue](../../issues/new?labels=bug).
 
 ## Installation (Server Side)
-
-You can install the package via composer:
 
 ```bash
 composer require timgws/laravel-expo-updates
@@ -89,8 +96,77 @@ EXPO_UPDATES_CACHE_TTL=60
 Check out the [expo-updates configuration guide](https://docs.expo.dev/versions/latest/sdk/updates/#usage).
 
 > [!WARNING]  
-> `updates.url` must point to https://YOUR-DOMAIN/updates/api/manifest (note the /api/manifest path). Pointing to the
-> site root will return HTML, not a manifest.
+> The `updates.url` must point to `https://YOUR-DOMAIN/updates/{projectSlug}/manifest` where `{projectSlug}` matches the project slug in your Laravel database. Pointing to the wrong path or using the wrong slug will cause OTA updates to fail.
+
+### Mobile App Configuration
+
+Configure your React Native/Expo app's `app.config.js` or `app.json` with the correct update URL:
+
+**Find your project slug:**
+```bash
+php artisan tinker
+>>> $project = \LaravelExpoUpdates\Models\Project::first();
+>>> echo $project->slug;
+```
+
+**Configure app.config.js:**
+```javascript
+export default {
+  expo: {
+    // ... other config
+    updates: {
+      url: "https://YOUR-DOMAIN/updates/YOUR-PROJECT-SLUG/manifest",
+      enabled: true,
+      checkOnLaunch: "ALWAYS",  // or "WIFI_ONLY" or "NEVER"
+      fallbackToCacheTimeout: 15000,
+      codeSigningCertificate: "./ota-certificate.pem",  // Path to your public certificate
+      codeSigningMetadata: {
+        keyid: "main",
+        alg: "rsa-v1_5-sha256"
+      }
+    },
+    runtimeVersion: {
+      policy: "sdkVersion"  // or "appVersion" or "nativeVersion"
+    }
+  }
+}
+```
+
+**Complete example (app.json):**
+```json
+{
+  "expo": {
+    "updates": {
+      "url": "https://app.meepha.com/updates/my-app/manifest",
+      "enabled": true,
+      "checkOnLaunch": "ALWAYS",
+      "fallbackToCacheTimeout": 15000,
+      "codeSigningCertificate": "./ota-certificate.pem",
+      "codeSigningMetadata": {
+        "keyid": "main",
+        "alg": "rsa-v1_5-sha256"
+      }
+    }
+  }
+}
+```
+
+**Important:** The `projectSlug` in the URL must **exactly match** the `slug` field in your `expo_projects` database table. Mismatches will cause 404 errors and prevent OTA updates from working.
+
+**Verify your configuration:**
+```bash
+# Replace with your actual domain and project slug
+curl -H "expo-platform: ios" \
+     -H "expo-runtime-version: 1.0.0" \
+     -H "expo-protocol-version: 1" \
+     -H "accept: application/json" \
+     "https://YOUR-DOMAIN/updates/YOUR-PROJECT-SLUG/manifest"
+```
+
+If you receive a valid JSON manifest response, your configuration is correct. If you get HTML or errors, check:
+- The project slug matches your database
+- The route prefix matches your `EXPO_UPDATES_ROUTE_PREFIX` config
+- Your Laravel routes are properly registered (`php artisan route:list | grep updates`)
 
 ## Replacing the default models
 
@@ -135,6 +211,67 @@ To enable code signing:
    EXPO_UPDATES_PRIVATE_KEY_PATH=/path/to/private.key
    ```
 
+#### Generating Code Signing Keys
+
+You can generate your code signing keys using the official Expo package:
+
+```bash
+npm install @expo/code-signing-certificates
+```
+
+Create a script `generate-keys.js`:
+
+```javascript
+const {
+  generateKeyPair,
+  convertKeyPairToPEM,
+  generateSelfSignedCodeSigningCertificate,
+  convertCertificateToCertificatePEM,
+} = require('@expo/code-signing-certificates');
+const fs = require('fs');
+
+// 1. Generate key pair
+const keyPair = generateKeyPair();
+
+// 2. Set validity period (10 years)
+const validityNotBefore = new Date();
+const validityNotAfter = new Date();
+validityNotAfter.setFullYear(validityNotAfter.getFullYear() + 10);
+
+// 3. Create self-signed certificate
+const certificate = generateSelfSignedCodeSigningCertificate({
+  keyPair,
+  validityNotBefore,
+  validityNotAfter,
+  commonName: 'Your App Name',
+});
+
+// 4. Convert to PEM format
+const keyPairPEM = convertKeyPairToPEM(keyPair);
+const certificatePEM = convertCertificateToCertificatePEM(certificate);
+
+// 5. Save files
+fs.writeFileSync('./ota-private.pem', keyPairPEM.privateKeyPEM);
+fs.writeFileSync('./ota-public.pem', keyPairPEM.publicKeyPEM);
+fs.writeFileSync('./ota-certificate.pem', certificatePEM);
+
+console.log('✅ Keys generated successfully!');
+console.log('- Private key: ./ota-private.pem (keep this SECRET on your server)');
+console.log('- Public key: ./ota-public.pem');
+console.log('- Certificate: ./ota-certificate.pem (add this to your mobile app)');
+```
+
+Run the script:
+
+```bash
+node generate-keys.js
+```
+
+**Important:**
+- Keep `ota-private.pem` **secret** and secure on your Laravel server
+- Add `ota-certificate.pem` to your React Native/Expo app (configure in `app.json`)
+- Never commit private keys to version control (add to `.gitignore`)
+
 ### Asset Storage
 
 Assets are stored using Laravel's storage system. By default, they are stored in the `public` disk under the
@@ -142,26 +279,36 @@ Assets are stored using Laravel's storage system. By default, they are stored in
 
 ### Quick checks & commands
 
-Confirm the manifest route is registered:
+Confirm the package routes are registered:
 
-```
-php artisan route:list | grep -i manifest
+```bash
+php artisan route:list | grep updates
 ```
 
-Fetch the manifest like the client would (adjust headers/values as needed):
+You should see routes like:
+- `GET|HEAD  updates/manifest`
+- `GET|HEAD  updates/{projectSlug}/manifest`
+- `GET|HEAD  updates/{projectSlug}/asset/{key}`
+- `POST      updates/{projectSlug}/upload`
 
-```
+Fetch a manifest like the client would (replace values with your actual configuration):
+
+```bash
 curl -i \
--H "Accept: application/expo+json" \
+-H "Accept: multipart/mixed" \
 -H "Expo-Platform: ios" \
 -H "Expo-Runtime-Version: 1.0.0" \
--H "Expo-Channel-Name: production" \
-https://your-domain.example/api/manifest
+-H "Expo-Protocol-Version: 1" \
+https://your-domain.example/updates/your-project-slug/manifest
 ```
 
 > [!NOTE]  
-> If you receive HTML instead of JSON, you’re likely hitting the wrong path or an HTML middleware.
-> Double-check the URL and route group.
+> If you receive HTML instead of JSON/multipart, check:
+> - The URL path includes the correct `{projectSlug}`
+> - The project exists in your database with matching slug
+> - Laravel routes are loaded (`php artisan optimize:clear` if needed)
+> - You're using the correct route prefix from your config
+
 
 ## License
 

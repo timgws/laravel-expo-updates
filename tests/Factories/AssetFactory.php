@@ -12,11 +12,17 @@ class AssetFactory extends Factory
 
     public function definition()
     {
+        $manifest = Manifest::factory();
+
         return [
-            'manifest_id' => Manifest::factory(),
+            'manifest_id' => $manifest,
+            'project_id' => function (array $attributes) {
+                $manifest = \LaravelExpoUpdates\Models\Manifest::find($attributes['manifest_id']);
+                return $manifest?->project_id;
+            },
             'key' => $this->faker->unique()->word . '.js',
             'content_type' => 'application/javascript',
-            'content' => 'console.log("test");',
+            'path' => 'updates/' . $this->faker->uuid() . '/test.js',
             'url' => $this->faker->url,
             'hash' => $this->faker->sha256,
             'file_extension' => 'js'

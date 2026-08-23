@@ -3,9 +3,11 @@
 namespace LaravelExpoUpdates\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use LaravelExpoUpdates\Contracts\AssetInterface;
+use LaravelExpoUpdates\Tests\Factories\AssetFactory;
 
 /**
  * Represents an asset file for an Expo project update.
@@ -26,6 +28,7 @@ use LaravelExpoUpdates\Contracts\AssetInterface;
  */
 class Asset extends Model implements AssetInterface
 {
+    use HasFactory;
     use HasUuids;
 
     protected $table = 'expo_assets';
@@ -40,6 +43,7 @@ class Asset extends Model implements AssetInterface
         'hash',
         'url',
         'file_extension',
+        'path',
     ];
 
     /**
@@ -85,5 +89,10 @@ class Asset extends Model implements AssetInterface
     public function getFileExtension(): string
     {
         return $this->file_extension;
+    }
+
+    protected static function newFactory()
+    {
+        return AssetFactory::new();
     }
 } 

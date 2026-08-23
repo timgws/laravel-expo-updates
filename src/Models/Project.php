@@ -3,9 +3,11 @@
 namespace LaravelExpoUpdates\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use LaravelExpoUpdates\Contracts\ProjectInterface;
+use LaravelExpoUpdates\Tests\Factories\ProjectFactory;
 
 /**
  * Represents an Expo project that can have multiple updates.
@@ -19,6 +21,7 @@ use LaravelExpoUpdates\Contracts\ProjectInterface;
  */
 class Project extends Model implements ProjectInterface
 {
+    use HasFactory;
     use HasUuids;
 
     protected $table = 'expo_projects';
@@ -34,6 +37,7 @@ class Project extends Model implements ProjectInterface
     ];
 
     protected $casts = [
+        'config' => 'array',
         'server_headers' => 'array',
         'asset_headers' => 'array',
     ];
@@ -71,5 +75,10 @@ class Project extends Model implements ProjectInterface
     public function getAssetHeaders(): array
     {
         return $this->config['asset_headers'] ?? [];
+    }
+
+    protected static function newFactory()
+    {
+        return ProjectFactory::new();
     }
 } 

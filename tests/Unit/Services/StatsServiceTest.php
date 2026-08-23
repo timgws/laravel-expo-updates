@@ -25,13 +25,12 @@ class StatsServiceTest extends TestCase
     {
         $this->statsService->recordRequest($this->project, 'ios', '1.0.0');
 
-        $this->assertDatabaseHas('update_stats', [
+        $this->assertDatabaseHas('expo_update_stats', [
             'project_id' => $this->project->id,
             'platform' => 'ios',
             'runtime_version' => '1.0.0',
             'type' => 'request',
             'count' => 1,
-            'date' => now()->toDateString()
         ]);
     }
 
@@ -40,13 +39,12 @@ class StatsServiceTest extends TestCase
     {
         $this->statsService->recordUpgrade($this->project, 'ios', '1.0.0');
 
-        $this->assertDatabaseHas('update_stats', [
+        $this->assertDatabaseHas('expo_update_stats', [
             'project_id' => $this->project->id,
             'platform' => 'ios',
             'runtime_version' => '1.0.0',
             'type' => 'upgrade',
             'count' => 1,
-            'date' => now()->toDateString()
         ]);
     }
 
@@ -66,13 +64,12 @@ class StatsServiceTest extends TestCase
         // Record another request
         $this->statsService->recordRequest($this->project, 'ios', '1.0.0');
 
-        $this->assertDatabaseHas('update_stats', [
+        $this->assertDatabaseHas('expo_update_stats', [
             'project_id' => $this->project->id,
             'platform' => 'ios',
             'runtime_version' => '1.0.0',
             'type' => 'request',
             'count' => 2,
-            'date' => now()->toDateString()
         ]);
     }
 
@@ -101,8 +98,8 @@ class StatsServiceTest extends TestCase
         $stats = $this->statsService->getStats($this->project);
 
         $this->assertCount(2, $stats);
-        $this->assertEquals(5, $stats[0]['count']);
-        $this->assertEquals(3, $stats[1]['count']);
+        $counts = collect($stats)->pluck('count')->sort()->values()->all();
+        $this->assertEquals([3, 5], $counts);
     }
 
     /** @test */

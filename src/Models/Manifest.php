@@ -3,10 +3,12 @@
 namespace LaravelExpoUpdates\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use LaravelExpoUpdates\Contracts\ManifestInterface;
+use LaravelExpoUpdates\Tests\Factories\ManifestFactory;
 
 /**
  * Represents an update manifest for an Expo project.
@@ -26,6 +28,7 @@ use LaravelExpoUpdates\Contracts\ManifestInterface;
  */
 class Manifest extends Model implements ManifestInterface
 {
+    use HasFactory;
     use HasUuids;
 
     protected $table = 'expo_manifests';
@@ -88,5 +91,10 @@ class Manifest extends Model implements ManifestInterface
     public function getExtra(): array
     {
         return $this->extra ?? [];
+    }
+
+    protected static function newFactory()
+    {
+        return ManifestFactory::new();
     }
 } 

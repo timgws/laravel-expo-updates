@@ -15,6 +15,7 @@ use LaravelExpoUpdates\Http\Middleware\ValidateExpoRequest;
 use LaravelExpoUpdates\Services\AssetService;
 use LaravelExpoUpdates\Services\ManifestService;
 use LaravelExpoUpdates\Services\StatsService;
+use LaravelExpoUpdates\Console\Commands\FixUniqueConstraint;
 
 /**
  * Service provider for the Laravel Expo Updates package.
@@ -71,6 +72,13 @@ class ExpoUpdatesServiceProvider extends ServiceProvider
 
         $this->loadMigrationsFrom(__DIR__.'/../database/migrations');
 
+        // Register commands
+        if ($this->app->runningInConsole()) {
+            $this->commands([
+                FixUniqueConstraint::class,
+            ]);
+        }
+
         $this->app['router']->aliasMiddleware('expo.validate', ValidateExpoRequest::class);
         $this->app['router']->aliasMiddleware('expo.track', TrackUpdateRequests::class);
         $this->app['router']->aliasMiddleware('expo.upload-auth', AuthenticateExpoUploadRequest::class);
@@ -80,13 +88,15 @@ class ExpoUpdatesServiceProvider extends ServiceProvider
         // Project-specific routes
         $this->app['router']->group(['prefix' => $prefix.'/{projectSlug}', 'middleware' => ['expo.validate', 'expo.track']], function ($router) {
             $router->get('manifest', [ExpoUpdatesController::class, 'manifest']);
-            $router->get('asset/{assetKey}', [ExpoUpdatesController::class, 'asset']);
+            $router->get('asset/{key}', [ExpoUpdatesController::class, 'asset']);
+            $router->post('upload', [UploadController::class, 'upload'])
+                ->middleware('expo.upload-auth');
         });
 
         // Default routes (will use project from header or config)
         $this->app['router']->group(['prefix' => $prefix, 'middleware' => ['expo.validate', 'expo.track']], function ($router) {
             $router->get('manifest', [ExpoUpdatesController::class, 'manifest']);
-            $router->get('asset/{assetKey}', [ExpoUpdatesController::class, 'asset']);
+            $router->get('asset/{key}', [ExpoUpdatesController::class, 'asset']);
             $router->post('upload', [UploadController::class, 'upload'])
                 ->middleware('expo.upload-auth');
         });
